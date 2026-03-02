@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>F1 Fantasy 2026 — Race Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #E8002D;
+    --gold: #FFD700;
+    --silver: #C0C0C0;
+    --dark: #0A0A0F;
+    --darker: #050508;
+    --panel: #111118;
+    --border: rgba(255,255,255,0.07);
+    --text: #E8E8F0;
+    --muted: #6B6B80;
+    --green: #00E87A;
+    --orange: #FF6B35;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--darker); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  /* BACKGROUND GRID */
+  body::before {
+    content: '';
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-image: linear-gradient(rgba(232,0,45,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(232,0,45,0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* HERO */
+  .hero {
+    position: relative; z-index: 1;
+    padding: 60px 40px 0;
+    text-align: center;
+  }
+  .hero-badge {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--red); border: 1px solid rgba(232,0,45,0.4);
+    padding: 6px 16px; border-radius: 2px; margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(60px, 10vw, 120px);
+    line-height: 0.9;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, #fff 40%, rgba(255,255,255,0.4));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .hero h1 span { color: var(--red); -webkit-text-fill-color: var(--red); }
+  .hero-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px; color: var(--muted); margin-top: 10px; letter-spacing: 1px;
+  }
+
+  /* NAV TABS */
+  .tabs {
+    display: flex; justify-content: center; gap: 4px;
+    padding: 40px 40px 0; position: relative; z-index: 1;
+  }
+  .tab {
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    letter-spacing: 2px; text-transform: uppercase;
+    padding: 10px 24px; border: 1px solid var(--border);
+    background: transparent; color: var(--muted);
+    cursor: pointer; transition: all 0.2s; border-radius: 2px;
+  }
+  .tab:hover { border-color: rgba(232,0,45,0.4); color: var(--text); }
+  .tab.active { background: var(--red); border-color: var(--red); color: #fff; }
+
+  /* MAIN CONTENT */
+  .content { padding: 30px 40px 60px; max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* SECTION HEADERS */
+  .section-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 42px; letter-spacing: 2px; margin-bottom: 6px;
+    border-bottom: 2px solid var(--red); padding-bottom: 6px;
+    display: inline-block;
+  }
+  .section-sub { font-size: 13px; color: var(--muted); margin-bottom: 30px; font-family: 'Space Mono', monospace; }
+
+  /* DRIVER GRID */
+  .driver-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .driver-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 20px;
+    position: relative; overflow: hidden;
+    transition: all 0.25s;
+    cursor: default;
+  }
+  .driver-card::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 3px; height: 100%;
+    background: var(--border);
+  }
+  .driver-card.tier-1::before { background: var(--gold); }
+  .driver-card.tier-2::before { background: var(--silver); }
+  .driver-card.tier-3::before { background: #CD7F32; }
+  .driver-card.tier-mid::before { background: #4A9EFF; }
+  .driver-card.tier-val::before { background: var(--green); }
+  .driver-card:hover { border-color: rgba(232,0,45,0.3); transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+
+  .driver-rank {
+    font-family: 'Bebas Neue', sans-serif; font-size: 48px;
+    color: rgba(255,255,255,0.06); position: absolute; right: 16px; top: 10px;
+  }
+  .driver-name { font-size: 17px; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .driver-team { font-size: 12px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 16px; }
+  .driver-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .stat { text-align: center; }
+  .stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 22px; color: var(--text); }
+  .stat-lbl { font-size: 10px; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; font-family: 'Space Mono', monospace; }
+  .driver-price {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px;
+  }
+  .price-tag {
+    font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700;
+    color: var(--gold);
+  }
+  .ppm-badge {
+    font-family: 'Space Mono', monospace; font-size: 11px;
+    padding: 3px 8px; border-radius: 2px;
+    background: rgba(0,232,122,0.1); color: var(--green);
+    border: 1px solid rgba(0,232,122,0.2);
+  }
+  .ppm-badge.poor { background: rgba(255,107,53,0.1); color: var(--orange); border-color: rgba(255,107,53,0.2); }
+  .ppm-badge.ok { background: rgba(74,158,255,0.1); color: #4A9EFF; border-color: rgba(74,158,255,0.2); }
+
+  /* VERDICT BADGE */
+  .verdict {
+    display: inline-block; font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 2px; margin-bottom: 12px;
+  }
+  .verdict.pick { background: rgba(0,232,122,0.15); color: var(--green); border: 1px solid rgba(0,232,122,0.3); }
+  .verdict.skip { background: rgba(255,107,53,0.15); color: var(--orange); border: 1px solid rgba(255,107,53,0.3); }
+  .verdict.watch { background: rgba(255,215,0,0.15); color: var(--gold); border: 1px solid rgba(255,215,0,0.3); }
+
+  /* FANTASY LINEUP */
+  .lineup-hero {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px; padding: 40px;
+    margin-bottom: 30px;
+    position: relative; overflow: hidden;
+  }
+  .lineup-hero::after {
+    content: '2026'; position: absolute; right: -20px; bottom: -30px;
+    font-family: 'Bebas Neue', sans-serif; font-size: 200px;
+    color: rgba(232,0,45,0.04); pointer-events: none; line-height: 1;
+  }
+  .lineup-title { font-family: 'Bebas Neue', sans-serif; font-size: 36px; letter-spacing: 2px; margin-bottom: 4px; }
+  .lineup-subtitle { font-size: 13px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 30px; }
+
+  .budget-bar { margin-bottom: 30px; }
+  .budget-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .budget-label { font-family: 'Space Mono', monospace; font-size: 12px; color: var(--muted); }
+  .budget-num { font-family: 'Bebas Neue', sans-serif; font-size: 28px; }
+  .budget-num.used { color: var(--red); }
+  .budget-num.remaining { color: var(--green); }
+  .bar-track { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--red), #ff4444); border-radius: 3px; transition: width 1s ease; }
+
+  .lineup-slots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+  .lineup-slot {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 4px; padding: 16px; text-align: center;
+    position: relative; transition: all 0.3s;
+  }
+  .lineup-slot.filled { border-color: rgba(232,0,45,0.3); background: rgba(232,0,45,0.05); }
+  .slot-role { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+  .slot-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .slot-team-name { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; margin-bottom: 8px; }
+  .slot-price { font-family: 'Bebas Neue', sans-serif; font-size: 20px; color: var(--gold); }
+  .slot-boost { 
+    position: absolute; top: 8px; right: 8px;
+    font-family: 'Space Mono', monospace; font-size: 9px;
+    background: var(--gold); color: #000; padding: 2px 6px; border-radius: 2px;
+    font-weight: 700;
+  }
+
+  .constructor-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+  .constructor-slot {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 4px; padding: 20px; 
+    transition: all 0.3s;
+  }
+  .constructor-slot.filled { border-color: rgba(0,232,122,0.3); background: rgba(0,232,122,0.04); }
+  .con-label { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 2px; margin-bottom: 8px; }
+  .con-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .con-drivers { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  .con-price { font-family: 'Bebas Neue', sans-serif; font-size: 26px; color: var(--green); }
+
+  /* TOTAL BUDGET */
+  .total-summary {
+    display: flex; justify-content: space-around; align-items: center;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 4px; padding: 20px;
+  }
+  .summary-item { text-align: center; }
+  .summary-val { font-family: 'Bebas Neue', sans-serif; font-size: 32px; }
+  .summary-lbl { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; letter-spacing: 1px; text-transform: uppercase; }
+  .divider { width: 1px; height: 50px; background: var(--border); }
+
+  /* STRATEGY CARDS */
+  .strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px; }
+  .strategy-card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 4px; padding: 24px;
+  }
+  .strategy-card h3 { 
+    font-family: 'Bebas Neue', sans-serif; font-size: 24px; letter-spacing: 1px; 
+    margin-bottom: 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .strategy-card h3 .icon { font-size: 20px; }
+  .strategy-card p { font-size: 14px; color: var(--muted); line-height: 1.7; }
+  .strategy-card .highlight { color: var(--gold); font-weight: 600; }
+
+  /* SCROLLBAR */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--darker); }
+  ::-webkit-scrollbar-thumb { background: var(--red); border-radius: 2px; }
+
+  /* TEAM TABLE */
+  .race-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .race-table th { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--border); }
+  .race-table td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .race-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .p1 { color: var(--gold); font-weight: 700; }
+  .p2 { color: var(--silver); }
+  .p3 { color: #CD7F32; }
+  .pts-cell { font-family: 'Space Mono', monospace; }
+
+  /* RESPONSIVE */
+  @media(max-width:768px) {
+    .hero { padding: 40px 20px 0; }
+    .content { padding: 20px; }
+    .tabs { padding: 20px 20px 0; flex-wrap: wrap; }
+    .lineup-slots { grid-template-columns: repeat(2, 1fr); }
+    .constructor-slots { grid-template-columns: 1fr; }
+    .total-summary { flex-direction: column; gap: 16px; }
+    .divider { width: 80px; height: 1px; }
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .panel.active { animation: fadeIn 0.3s ease; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-badge">2025 Season Intelligence Report</div>
+  <h1>F1 <span>Fantasy</span><br>2026</h1>
+  <p class="hero-sub">$100M CAP · 5 DRIVERS · 2 CONSTRUCTORS · DATA-DRIVEN PICKS</p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('lineup')">🏆 My Lineup</button>
+  <button class="tab" onclick="switchTab('drivers')">🏎 Driver Rankings</button>
+  <button class="tab" onclick="switchTab('constructors')">🏗 Constructors</button>
+  <button class="tab" onclick="switchTab('strategy')">📊 Strategy</button>
+</div>
+
+<div class="content">
+
+  <!-- LINEUP TAB -->
+  <div class="panel active" id="panel-lineup">
+    <div class="lineup-hero">
+      <div class="lineup-title">RECOMMENDED FANTASY LINEUP</div>
+      <div class="lineup-subtitle">Based on 2025 season data · Optimized for $100M cap · PPM-weighted selection</div>
+
+      <div class="budget-bar">
+        <div class="budget-row">
+          <span class="budget-label">BUDGET SPENT</span>
+          <span class="budget-num used">$99.0M</span>
+        </div>
+        <div class="budget-row">
+          <span class="budget-label">REMAINING</span>
+          <span class="budget-num remaining">$1.0M</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:99%"></div></div>
+      </div>
+
+      <p style="font-size:12px; color:var(--muted); margin-bottom:20px; font-family:'Space Mono',monospace;">
+        DRIVERS (×5) — $100M − CONSTRUCTORS BUDGET
+      </p>
+
+      <div class="lineup-slots">
+        <div class="lineup-slot filled">
+          <div class="slot-boost">2× BOOST</div>
+          <div class="slot-role">Driver 1 · Anchor</div>
+          <div class="slot-name">Max Verstappen</div>
+          <div class="slot-team-name">Red Bull Racing</div>
+          <div class="slot-price">$27.7M</div>
+        </div>
+        <div class="lineup-slot filled">
+          <div class="slot-role">Driver 2 · Champion</div>
+          <div class="slot-name">Lando Norris</div>
+          <div class="slot-team-name">McLaren</div>
+          <div class="slot-price">$27.2M</div>
+        </div>
+        <div class="lineup-slot filled">
+          <div class="slot-role">Driver 3 · Value Star</div>
+          <div class="slot-name">Oliver Bearman</div>
+          <div class="slot-team-name">Haas</div>
+          <div class="slot-price">$7.4M</div>
+        </div>
+        <div class="lineup-slot filled">
+          <div class="slot-role">Driver 4 · Value</div>
+          <div class="slot-name">Esteban Ocon</div>
+          <div class="slot-team-name">Haas</div>
+          <div class="slot-price">$7.3M</div>
+        </div>
+        <div class="lineup-slot filled">
+          <div class="slot-role">Driver 5 · Wildcard</div>
+          <div class="slot-name">Nico Hülkenberg</div>
+          <div class="slot-team-name">Audi</div>
+          <div class="slot-price">$6.8M</div>
+        </div>
+      </div>
+
+      <p style="font-size:12px; color:var(--muted); margin-bottom:16px; font-family:'Space Mono',monospace; margin-top:8px;">
+        CONSTRUCTORS (×2)
+      </p>
+
+      <div class="constructor-slots">
+        <div class="constructor-slot filled">
+          <div class="con-label">Constructor 1 · Primary</div>
+          <div class="con-name">McLaren</div>
+          <div class="con-drivers">Norris + Piastri · Reigning Champions</div>
+          <div class="con-price">$28.9M</div>
+        </div>
+        <div class="constructor-slot filled">
+          <div class="con-label">Constructor 2 · Value</div>
+          <div class="con-name">Haas</div>
+          <div class="con-drivers">Bearman + Ocon · Strong midfield value</div>
+          <div class="con-price">included in cap</div>
+        </div>
+      </div>
+
+      <div class="total-summary">
+        <div class="summary-item">
+          <div class="summary-val" style="color:var(--red);">$99.0M</div>
+          <div class="summary-lbl">Total Spent</div>
+        </div>
+        <div class="divider"></div>
+        <div class="summary-item">
+          <div class="summary-val" style="color:var(--green);">$1.0M</div>
+          <div class="summary-lbl">Remaining</div>
+        </div>
+        <div class="divider"></div>
+        <div class="summary-item">
+          <div class="summary-val" style="color:var(--gold);">7</div>
+          <div class="summary-lbl">Selections</div>
+        </div>
+        <div class="divider"></div>
+        <div class="summary-item">
+          <div class="summary-val">776+</div>
+          <div class="summary-lbl">Est. 2025 Base Pts</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:24px;margin-bottom:16px;">
+      <h3 style="font-family:'Bebas Neue';font-size:24px;letter-spacing:1px;margin-bottom:16px;color:var(--gold);">💡 Why This Lineup?</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div>
+          <p style="font-size:13px;color:var(--muted);line-height:1.8;">
+            <span style="color:var(--text);font-weight:600;">Verstappen ($27.7M)</span> — 776 F1 Fantasy pts in 2025, PPM of 28.01. The single best value among premium drivers. 8 wins, massive scoring floor.<br><br>
+            <span style="color:var(--text);font-weight:600;">Norris ($27.2M)</span> — 2025 champion with 7 wins and 394 pts. Best qualifying scorer on the grid; maximizes overtake points too.<br><br>
+            <span style="color:var(--text);font-weight:600;">Bearman ($7.4M)</span> — 206 F1 Fantasy pts in 2025, PPM of 27.84. Second-best PPM on the entire grid. Criminally cheap.
+          </p>
+        </div>
+        <div>
+          <p style="font-size:13px;color:var(--muted);line-height:1.8;">
+            <span style="color:var(--text);font-weight:600;">Ocon ($7.3M)</span> — 34 WC pts, consistent top-10 finisher in a competitive Haas. Still affordable at $7.3M, reliable Fantasy scorer.<br><br>
+            <span style="color:var(--text);font-weight:600;">Hülkenberg ($6.8M)</span> — Moved to Audi but strong 2025 showing (51 pts). Lowest-cost selection, frees up budget for premium slots.<br><br>
+            <span style="color:var(--text);font-weight:600;">McLaren Constructor ($28.9M)</span> — Reigning constructors' champion. Both drivers consistently in points; huge pit-stop bonuses.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:rgba(232,0,45,0.05);border:1px solid rgba(232,0,45,0.2);border-radius:4px;padding:16px;">
+      <p style="font-size:12px;color:var(--muted);line-height:1.7;font-family:'Space Mono',monospace;">
+        ⚠ NOTE: This is the 2026 F1 Fantasy game based on 2025 season data. Prices reflect pre-season values and will shift after each race weekend. The 2026 season features a full regulation reset — results may vary from 2025 patterns. Use 2 free weekly transfers to adapt. Use your Boost chip on Verstappen or Norris at high-scoring circuits.
+      </p>
+    </div>
+  </div>
+
+  <!-- DRIVERS TAB -->
+  <div class="panel" id="panel-drivers">
+    <div class="section-title">DRIVER ANALYSIS</div>
+    <p class="section-sub">2025 RACE POINTS · WINS · PODIUMS · F1 FANTASY 2026 PRICE · PPM RATING</p>
+
+    <div class="driver-grid">
+      <!-- TIER 1 -->
+      <div class="driver-card tier-1">
+        <div class="driver-rank">1</div>
+        <div class="verdict pick">⭐ MUST PICK</div>
+        <div class="driver-name">Lando Norris</div>
+        <div class="driver-team">McLaren Mercedes · 2025 Champion</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">394</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">7</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">18</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$27.2M</span><span class="ppm-badge">PPM: 14.5★</span></div>
+      </div>
+
+      <div class="driver-card tier-1">
+        <div class="driver-rank">2</div>
+        <div class="verdict pick">⭐ MUST PICK</div>
+        <div class="driver-name">Max Verstappen</div>
+        <div class="driver-team">Red Bull Racing Honda RBPT</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">389</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">8</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">15</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$27.7M</span><span class="ppm-badge">PPM: 28.0★★</span></div>
+      </div>
+
+      <div class="driver-card tier-1">
+        <div class="driver-rank">3</div>
+        <div class="verdict watch">👀 CONSIDER</div>
+        <div class="driver-name">Oscar Piastri</div>
+        <div class="driver-team">McLaren Mercedes</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">381</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">7</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">16</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$25.5M</span><span class="ppm-badge">PPM: 26.3★</span></div>
+      </div>
+
+      <div class="driver-card tier-2">
+        <div class="driver-rank">4</div>
+        <div class="verdict skip">⚡ OVERPRICED</div>
+        <div class="driver-name">George Russell</div>
+        <div class="driver-team">Mercedes</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">289</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">2</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">9</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$27.4M</span><span class="ppm-badge poor">PPM: 10.5✗</span></div>
+      </div>
+
+      <div class="driver-card tier-2">
+        <div class="driver-rank">5</div>
+        <div class="verdict skip">⚡ OVERPRICED</div>
+        <div class="driver-name">Charles Leclerc</div>
+        <div class="driver-team">Ferrari</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">225</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">7</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$22.8M</span><span class="ppm-badge poor">PPM: 9.9✗</span></div>
+      </div>
+
+      <div class="driver-card tier-3">
+        <div class="driver-rank">6</div>
+        <div class="verdict skip">⚡ OVERPRICED</div>
+        <div class="driver-name">Kimi Antonelli</div>
+        <div class="driver-team">Mercedes</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">135</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">3</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$23.2M</span><span class="ppm-badge poor">PPM: 5.8✗</span></div>
+      </div>
+
+      <div class="driver-card tier-3">
+        <div class="driver-rank">7</div>
+        <div class="verdict skip">⚡ AVOID</div>
+        <div class="driver-name">Lewis Hamilton</div>
+        <div class="driver-team">Ferrari</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">135</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$22.5M</span><span class="ppm-badge poor">PPM: 6.0✗</span></div>
+      </div>
+
+      <div class="driver-card tier-mid">
+        <div class="driver-rank">8</div>
+        <div class="verdict watch">👀 MONITOR</div>
+        <div class="driver-name">Carlos Sainz</div>
+        <div class="driver-team">Williams Mercedes</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">54</div><div class="stat-lbl">Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">2</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$11.8M</span><span class="ppm-badge ok">PPM: 4.6</span></div>
+      </div>
+
+      <div class="driver-card tier-val">
+        <div class="driver-rank">9</div>
+        <div class="verdict pick">🔥 TOP VALUE</div>
+        <div class="driver-name">Oliver Bearman</div>
+        <div class="driver-team">Haas Ferrari</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">206*</div><div class="stat-lbl">F1F Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">39</div><div class="stat-lbl">WC Pts</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$7.4M</span><span class="ppm-badge">PPM: 27.8★★</span></div>
+      </div>
+
+      <div class="driver-card tier-val">
+        <div class="driver-rank">10</div>
+        <div class="verdict pick">🔥 VALUE PICK</div>
+        <div class="driver-name">Esteban Ocon</div>
+        <div class="driver-team">Haas Ferrari</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">34</div><div class="stat-lbl">WC Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$7.3M</span><span class="ppm-badge">PPM: good</span></div>
+      </div>
+
+      <div class="driver-card tier-val">
+        <div class="driver-rank">11</div>
+        <div class="verdict pick">💰 BUDGET GEM</div>
+        <div class="driver-name">Nico Hülkenberg</div>
+        <div class="driver-team">Audi</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">51</div><div class="stat-lbl">WC Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">1</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$6.8M</span><span class="ppm-badge">PPM: solid</span></div>
+      </div>
+
+      <div class="driver-card tier-mid">
+        <div class="driver-rank">12</div>
+        <div class="verdict watch">👀 WATCH</div>
+        <div class="driver-name">Isack Hadjar</div>
+        <div class="driver-team">Red Bull Racing</div>
+        <div class="driver-stats">
+          <div class="stat"><div class="stat-val">50</div><div class="stat-lbl">WC Pts</div></div>
+          <div class="stat"><div class="stat-val">0</div><div class="stat-lbl">Wins</div></div>
+          <div class="stat"><div class="stat-val">1</div><div class="stat-lbl">Podiums</div></div>
+        </div>
+        <div class="driver-price"><span class="price-tag">$15.1M</span><span class="ppm-badge poor">PPM: 3.3✗</span></div>
+      </div>
+    </div>
+    <p style="margin-top:20px;font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;">* F1 Fantasy points differ from World Championship points — include qualifying, overtakes, fastest lap, positions gained. Bearman's 206 F1F pts sourced from expert analysis.</p>
+  </div>
+
+  <!-- CONSTRUCTORS TAB -->
+  <div class="panel" id="panel-constructors">
+    <div class="section-title">CONSTRUCTORS</div>
+    <p class="section-sub">2025 TEAM PERFORMANCE · FANTASY PRICES · PICK RECOMMENDATION</p>
+
+    <table class="race-table" style="margin-bottom:30px;">
+      <thead>
+        <tr>
+          <th>Constructor</th>
+          <th>2025 WCC Pts (approx)</th>
+          <th>F1F 2026 Price</th>
+          <th>Top Drivers</th>
+          <th>Verdict</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="p1">McLaren Mercedes</td>
+          <td class="pts-cell p1">775+</td>
+          <td class="pts-cell">$28.9M</td>
+          <td>Norris + Piastri</td>
+          <td><span class="verdict pick" style="display:inline-block;">⭐ PICK</span></td>
+        </tr>
+        <tr>
+          <td class="p2">Red Bull Racing</td>
+          <td class="pts-cell p2">410+</td>
+          <td class="pts-cell">$28.2M</td>
+          <td>Verstappen + Hadjar</td>
+          <td><span class="verdict watch" style="display:inline-block;">👀 WATCH</span></td>
+        </tr>
+        <tr>
+          <td class="p2">Mercedes</td>
+          <td class="pts-cell">424+</td>
+          <td class="pts-cell">$29.3M</td>
+          <td>Russell + Antonelli</td>
+          <td><span class="verdict skip" style="display:inline-block;">⚡ COSTLY</span></td>
+        </tr>
+        <tr>
+          <td>Ferrari</td>
+          <td class="pts-cell">360+</td>
+          <td class="pts-cell">$23.3M</td>
+          <td>Leclerc + Hamilton</td>
+          <td><span class="verdict watch" style="display:inline-block;">👀 VALUE?</span></td>
+        </tr>
+        <tr>
+          <td>Williams Mercedes</td>
+          <td class="pts-cell">124+</td>
+          <td class="pts-cell">$12.0M</td>
+          <td>Sainz + Albon</td>
+          <td><span class="verdict watch" style="display:inline-block;">👀 MONITOR</span></td>
+        </tr>
+        <tr>
+          <td>Alpine Renault</td>
+          <td class="pts-cell">20+</td>
+          <td class="pts-cell">$12.5M</td>
+          <td>Gasly + Colapinto</td>
+          <td><span class="verdict skip" style="display:inline-block;">⚡ AVOID</span></td>
+        </tr>
+        <tr>
+          <td>Aston Martin</td>
+          <td class="pts-cell">80+</td>
+          <td class="pts-cell">$10.3M</td>
+          <td>Alonso + Stroll</td>
+          <td><span class="verdict skip" style="display:inline-block;">⚡ SKIP</span></td>
+        </tr>
+        <tr>
+          <td class="p3">Haas Ferrari</td>
+          <td class="pts-cell p3">73+</td>
+          <td class="pts-cell">~$8M</td>
+          <td>Bearman + Ocon</td>
+          <td><span class="verdict pick" style="display:inline-block;">🔥 VALUE</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="background:var(--panel);border:1px solid rgba(0,232,122,0.2);border-radius:4px;padding:20px;">
+        <h3 style="font-family:'Bebas Neue';font-size:24px;color:var(--green);margin-bottom:12px;">✅ RECOMMENDED: McLaren</h3>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;">Reigning Constructors' Champions. Both Norris and Piastri finished in the top 3 in 2025. McLaren scored most fantasy points of any constructor. At $28.9M, the PPM is the best on the grid for premium constructors. Paired with Haas, you lock in the budget.</p>
+      </div>
+      <div style="background:var(--panel);border:1px solid rgba(232,0,45,0.2);border-radius:4px;padding:20px;">
+        <h3 style="font-family:'Bebas Neue';font-size:24px;color:var(--red);margin-bottom:12px;">⚠ AVOID: Mercedes ($29.3M)</h3>
+        <p style="font-size:13px;color:var(--muted);line-height:1.7;">Most expensive constructor yet Russell's points came mostly from a single strong stretch. At $29.3M, you need consistent wins to justify the cost. In 2025, Mercedes had reliability issues (Antonelli had 4 DNFs). That's a lot of downside risk for the highest price tag.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- STRATEGY TAB -->
+  <div class="panel" id="panel-strategy">
+    <div class="section-title">FANTASY STRATEGY</div>
+    <p class="section-sub">POINTS PER MILLION · CHIP TIMING · TRANSFER STRATEGY · 2026 NOTES</p>
+
+    <div class="strategy-grid">
+      <div class="strategy-card">
+        <h3><span class="icon">📐</span> The PPM Framework</h3>
+        <p>Points Per Million (PPM) = fantasy points ÷ price. The <span class="highlight">only metric that matters</span>. Verstappen: 28.0 PPM. Bearman: 27.8 PPM. Russell: 10.5 PPM. You get nearly the same production from a $7.4M Bearman as from a $27.4M Russell — spend the savings on an elite anchor instead.</p>
+      </div>
+      <div class="strategy-card">
+        <h3><span class="icon">🏁</span> The Two Zones Rule</h3>
+        <p>Spend in two zones only: <span class="highlight">Premium ($25M+)</span> for one elite driver with high ceiling — pick Verstappen or Norris, both PPM >14. And <span class="highlight">Budget ($3-8M)</span> for value picks like Bearman, Ocon, Hülkenberg. Avoid the $9–23M dead zone entirely.</p>
+      </div>
+      <div class="strategy-card">
+        <h3><span class="icon">⚡</span> Use Your 2× Boost Wisely</h3>
+        <p>Your weekly Boost doubles one driver's score. Always apply it to <span class="highlight">Verstappen or Norris</span> — they score 50-60+ pts on a good weekend. High-scoring circuits: Monaco, Monza, Silverstone, Suzuka. Never waste it on midfield drivers regardless of form.</p>
+      </div>
+      <div class="strategy-card">
+        <h3><span class="icon">🔄</span> Transfer Strategy</h3>
+        <p>You get <span class="highlight">3 free transfers</span> in 2026, with 1 rollover allowed. Save transfers for after 3-4 races when prices update. The biggest gains come from buying drivers before a run of favorable circuits. Don't burn transfers chasing single-race upgrades.</p>
+      </div>
+      <div class="strategy-card">
+        <h3><span class="icon">🎰</span> 2026 Regulation Wildcard</h3>
+        <p>2026 is a <span class="highlight">full regulation reset</span> — new cars, new power units. Mercedes is widely tipped as the PU leader (supplying Mercedes, McLaren, Williams, Aston Martin). Red Bull is running their first in-house Ford PU. Be ready to pivot early if Red Bull struggles.</p>
+      </div>
+      <div class="strategy-card">
+        <h3><span class="icon">🧮</span> Budget Allocation Template</h3>
+        <p>
+          <span class="highlight">Driver 1 (Anchor):</span> $27–28M<br>
+          <span class="highlight">Driver 2 (Premium):</span> $25–27M<br>
+          <span class="highlight">Drivers 3–5 (Value):</span> $6–8M each<br>
+          <span class="highlight">Constructor 1:</span> $23–29M<br>
+          <span class="highlight">Constructor 2:</span> $8–12M<br>
+          Total: ~$99–100M
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`#panel-${tab}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Animate budget bar on load
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const bar = document.querySelector('.bar-fill');
+    if (bar) bar.style.width = '99%';
+  }, 500);
+});
+</script>
+</body>
+</html>
