@@ -269,6 +269,7 @@
   <button class="tab" onclick="switchTab('drivers')">🏎 Driver Rankings</button>
   <button class="tab" onclick="switchTab('constructors')">🏗 Constructors</button>
   <button class="tab" onclick="switchTab('strategy')">📊 Strategy</button>
+  <button class="tab" onclick="switchTab('builder')">🛠 Team Builder</button>
 </div>
 
 <div class="content">
@@ -692,15 +693,457 @@
   </div>
 </div>
 
+<!-- TEAM BUILDER TAB -->
+<div class="panel" id="panel-builder">
+  <div class="section-title">TEAM BUILDER</div>
+  <p class="section-sub">SELECT 5 DRIVERS + 2 CONSTRUCTORS · $100M CAP · GET INSTANT INSIGHTS</p>
+
+  <div style="display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;">
+
+    <!-- LEFT: PICKER -->
+    <div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:20px;margin-bottom:16px;">
+        <div style="font-family:'Bebas Neue';font-size:22px;letter-spacing:1px;margin-bottom:4px;">DRIVERS <span style="font-size:14px;color:var(--muted);font-family:'Space Mono',monospace;">(select up to 5)</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:14px;" id="driver-picker"></div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:20px;">
+        <div style="font-family:'Bebas Neue';font-size:22px;letter-spacing:1px;margin-bottom:4px;">CONSTRUCTORS <span style="font-size:14px;color:var(--muted);font-family:'Space Mono',monospace;">(select up to 2)</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:14px;" id="constructor-picker"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: SUMMARY PANEL -->
+    <div style="position:sticky;top:20px;">
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:20px;margin-bottom:12px;">
+        <div style="font-family:'Bebas Neue';font-size:26px;letter-spacing:1px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:10px;">MY TEAM</div>
+
+        <!-- Slots -->
+        <div id="builder-slots" style="margin-bottom:16px;"></div>
+
+        <!-- Budget Meter -->
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">BUDGET USED</span>
+            <span style="font-family:'Bebas Neue';font-size:20px;" id="budget-used-num">$0M</span>
+          </div>
+          <div class="bar-track"><div id="builder-bar" class="bar-fill" style="width:0%;transition:width 0.4s ease;"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;">
+            <span style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);">REMAINING</span>
+            <span style="font-family:'Space Mono',monospace;font-size:11px;" id="budget-remaining-num" class="budget-num remaining">$100M</span>
+          </div>
+        </div>
+
+        <!-- Over budget warning -->
+        <div id="over-budget-warn" style="display:none;background:rgba(232,0,45,0.1);border:1px solid rgba(232,0,45,0.3);border-radius:3px;padding:10px;margin-bottom:12px;font-family:'Space Mono',monospace;font-size:11px;color:var(--red);">
+          ⚠ OVER BUDGET — Remove a selection or swap for a cheaper option
+        </div>
+
+        <!-- CTA -->
+        <button onclick="analyseTeam()" style="width:100%;background:var(--red);color:#fff;border:none;border-radius:3px;padding:12px;font-family:'Bebas Neue';font-size:20px;letter-spacing:2px;cursor:pointer;transition:opacity 0.2s;" onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1">
+          ANALYSE MY TEAM →
+        </button>
+      </div>
+
+      <!-- Insight Panel -->
+      <div id="insight-panel" style="display:none;background:var(--panel);border:1px solid var(--border);border-radius:4px;padding:20px;"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .pick-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 4px; padding: 12px 14px;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 10px;
+    user-select: none;
+  }
+  .pick-card:hover { border-color: rgba(232,0,45,0.35); background: rgba(232,0,45,0.04); }
+  .pick-card.selected { border-color: var(--red); background: rgba(232,0,45,0.08); }
+  .pick-card.selected .pick-check { background: var(--red); border-color: var(--red); color: #fff; }
+  .pick-card.disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  .pick-check {
+    width: 20px; height: 20px; border-radius: 3px;
+    border: 1px solid var(--border); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; transition: all 0.2s;
+  }
+  .pick-info { flex: 1; min-width: 0; }
+  .pick-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick-meta { font-size: 11px; color: var(--muted); font-family: 'Space Mono', monospace; display: flex; justify-content: space-between; margin-top: 2px; }
+  .pick-price { color: var(--gold); font-weight: 700; }
+  .pick-tier { font-size: 9px; padding: 1px 5px; border-radius: 2px; }
+
+  .builder-slot-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+  }
+  .builder-slot-row:last-child { border-bottom: none; }
+  .slot-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+  .slot-dot.filled-d { background: var(--red); }
+  .slot-dot.filled-c { background: var(--green); }
+  .slot-name-col { flex: 1; color: var(--muted); font-family: 'Space Mono', monospace; font-size: 12px; }
+  .slot-name-col.has-val { color: var(--text); font-weight: 600; }
+  .slot-price-col { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--gold); }
+
+  .insight-block { margin-bottom: 16px; }
+  .insight-block:last-child { margin-bottom: 0; }
+  .insight-label {
+    font-family: 'Space Mono', monospace; font-size: 10px;
+    letter-spacing: 2px; color: var(--muted); text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .insight-score {
+    font-family: 'Bebas Neue'; font-size: 48px; line-height: 1;
+    margin-bottom: 4px;
+  }
+  .score-A { color: #00E87A; }
+  .score-B { color: #4A9EFF; }
+  .score-C { color: var(--gold); }
+  .score-D { color: var(--orange); }
+  .score-F { color: var(--red); }
+  .insight-row {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 8px 10px; border-radius: 3px;
+    margin-bottom: 6px; font-size: 12px; line-height: 1.6;
+    background: rgba(255,255,255,0.03);
+  }
+  .insight-row.good { border-left: 2px solid var(--green); }
+  .insight-row.bad { border-left: 2px solid var(--red); }
+  .insight-row.neutral { border-left: 2px solid var(--gold); }
+  .insight-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+</style>
+
 <script>
+const DRIVERS = [
+  { name: "Max Verstappen",   team: "Red Bull Racing", price: 27.7, pts: 389, wins: 8,  podiums: 15, dnf: 1,  ppm: 14.05, tier: "S" },
+  { name: "Lando Norris",     team: "McLaren",         price: 27.2, pts: 394, wins: 7,  podiums: 18, dnf: 1,  ppm: 14.49, tier: "S" },
+  { name: "Oscar Piastri",    team: "McLaren",         price: 25.5, pts: 381, wins: 7,  podiums: 16, dnf: 2,  ppm: 14.94, tier: "S" },
+  { name: "George Russell",   team: "Mercedes",        price: 27.4, pts: 289, wins: 2,  podiums: 9,  dnf: 0,  ppm: 10.55, tier: "A" },
+  { name: "Charles Leclerc",  team: "Ferrari",         price: 22.8, pts: 225, wins: 0,  podiums: 7,  dnf: 3,  ppm: 9.87,  tier: "A" },
+  { name: "Kimi Antonelli",   team: "Mercedes",        price: 23.2, pts: 135, wins: 0,  podiums: 3,  dnf: 4,  ppm: 5.82,  tier: "B" },
+  { name: "Lewis Hamilton",   team: "Ferrari",         price: 22.5, pts: 135, wins: 0,  podiums: 0,  dnf: 3,  ppm: 6.00,  tier: "B" },
+  { name: "Carlos Sainz",     team: "Williams",        price: 11.8, pts: 54,  wins: 0,  podiums: 2,  dnf: 4,  ppm: 4.58,  tier: "C" },
+  { name: "Alexander Albon",  team: "Williams",        price: 10.9, pts: 70,  wins: 0,  podiums: 0,  dnf: 4,  ppm: 6.42,  tier: "C" },
+  { name: "Isack Hadjar",     team: "Red Bull Racing", price: 15.1, pts: 50,  wins: 0,  podiums: 1,  dnf: 2,  ppm: 3.31,  tier: "C" },
+  { name: "Fernando Alonso",  team: "Aston Martin",    price: 14.2, pts: 51,  wins: 0,  podiums: 0,  dnf: 5,  ppm: 3.59,  tier: "C" },
+  { name: "Liam Lawson",      team: "RB Honda",        price: 8.5,  pts: 38,  wins: 0,  podiums: 0,  dnf: 5,  ppm: 4.47,  tier: "C" },
+  { name: "Yuki Tsunoda",     team: "Red Bull Racing", price: 9.2,  pts: 21,  wins: 0,  podiums: 0,  dnf: 1,  ppm: 2.28,  tier: "D" },
+  { name: "Pierre Gasly",     team: "Alpine",          price: 9.1,  pts: 20,  wins: 0,  podiums: 0,  dnf: 3,  ppm: 2.20,  tier: "D" },
+  { name: "Oliver Bearman",   team: "Haas",            price: 7.4,  pts: 39,  wins: 0,  podiums: 0,  dnf: 3,  ppm: 27.84, tier: "V" },
+  { name: "Esteban Ocon",     team: "Haas",            price: 7.3,  pts: 34,  wins: 0,  podiums: 0,  dnf: 1,  ppm: 4.66,  tier: "V" },
+  { name: "Nico Hülkenberg",  team: "Audi",            price: 6.8,  pts: 51,  wins: 0,  podiums: 1,  dnf: 4,  ppm: 7.50,  tier: "V" },
+  { name: "Lance Stroll",     team: "Aston Martin",    price: 6.5,  pts: 29,  wins: 0,  podiums: 0,  dnf: 1,  ppm: 4.46,  tier: "D" },
+  { name: "Franco Colapinto", team: "Alpine",          price: 5.9,  pts: 0,   wins: 0,  podiums: 0,  dnf: 1,  ppm: 0.00,  tier: "D" },
+  { name: "Gabriel Bortoleto",team: "Audi",            price: 5.8,  pts: 19,  wins: 0,  podiums: 0,  dnf: 5,  ppm: 3.28,  tier: "D" },
+];
+
+const CONSTRUCTORS = [
+  { name: "McLaren",       drivers: "Norris + Piastri",    price: 28.9, pts: 775, ppm: 26.8, tier: "S" },
+  { name: "Mercedes",      drivers: "Russell + Antonelli", price: 29.3, pts: 424, ppm: 14.5, tier: "A" },
+  { name: "Red Bull",      drivers: "Verstappen + Hadjar", price: 28.2, pts: 439, ppm: 15.6, tier: "A" },
+  { name: "Ferrari",       drivers: "Leclerc + Hamilton",  price: 23.3, pts: 360, ppm: 15.5, tier: "A" },
+  { name: "Williams",      drivers: "Sainz + Albon",       price: 12.0, pts: 124, ppm: 10.3, tier: "B" },
+  { name: "Alpine",        drivers: "Gasly + Colapinto",   price: 12.5, pts: 20,  ppm: 1.6,  tier: "D" },
+  { name: "Aston Martin",  drivers: "Alonso + Stroll",     price: 10.3, pts: 80,  ppm: 7.8,  tier: "C" },
+  { name: "Haas",          drivers: "Bearman + Ocon",      price: 9.8,  pts: 73,  ppm: 7.4,  tier: "B" },
+  { name: "RB Honda",      drivers: "Hadjar + Lawson",     price: 11.2, pts: 88,  ppm: 7.9,  tier: "B" },
+  { name: "Audi",          drivers: "Hülkenberg + Bortoleto", price: 8.5, pts: 70, ppm: 8.2, tier: "B" },
+];
+
+let selectedDrivers = [];
+let selectedConstructors = [];
+
+function tierColor(t) {
+  if (t === "S" || t === "V") return "#00E87A";
+  if (t === "A") return "#4A9EFF";
+  if (t === "B") return "#FFD700";
+  if (t === "C") return "#FF6B35";
+  return "#E8002D";
+}
+function tierLabel(t) {
+  if (t === "S") return "ELITE";
+  if (t === "V") return "VALUE★";
+  if (t === "A") return "STRONG";
+  if (t === "B") return "SOLID";
+  if (t === "C") return "RISKY";
+  return "POOR";
+}
+
+function buildPicker() {
+  const dp = document.getElementById('driver-picker');
+  const cp = document.getElementById('constructor-picker');
+  dp.innerHTML = '';
+  cp.innerHTML = '';
+
+  DRIVERS.forEach((d, i) => {
+    const sel = selectedDrivers.includes(i);
+    const dis = !sel && selectedDrivers.length >= 5;
+    const tc = tierColor(d.tier);
+    const card = document.createElement('div');
+    card.className = 'pick-card' + (sel ? ' selected' : '') + (dis ? ' disabled' : '');
+    card.innerHTML = `
+      <div class="pick-check">${sel ? '✓' : ''}</div>
+      <div class="pick-info">
+        <div class="pick-name">${d.name}</div>
+        <div class="pick-meta">
+          <span>${d.team}</span>
+          <span class="pick-price">$${d.price}M</span>
+        </div>
+        <div class="pick-meta" style="margin-top:3px;">
+          <span style="color:${tc};font-size:9px;background:rgba(${tc==='#00E87A'?'0,232,122':'74,158,255'},0.1);padding:1px 5px;border-radius:2px;">${tierLabel(d.tier)}</span>
+          <span style="color:var(--muted);">${d.pts} pts · ${d.wins}W</span>
+        </div>
+      </div>`;
+    card.onclick = () => toggleDriver(i);
+    dp.appendChild(card);
+  });
+
+  CONSTRUCTORS.forEach((c, i) => {
+    const sel = selectedConstructors.includes(i);
+    const dis = !sel && selectedConstructors.length >= 2;
+    const tc = tierColor(c.tier);
+    const card = document.createElement('div');
+    card.className = 'pick-card' + (sel ? ' selected' : '') + (dis ? ' disabled' : '');
+    card.innerHTML = `
+      <div class="pick-check">${sel ? '✓' : ''}</div>
+      <div class="pick-info">
+        <div class="pick-name">${c.name}</div>
+        <div class="pick-meta">
+          <span>${c.drivers}</span>
+          <span class="pick-price">$${c.price}M</span>
+        </div>
+        <div class="pick-meta" style="margin-top:3px;">
+          <span style="color:${tc};font-size:9px;background:rgba(${tc==='#00E87A'?'0,232,122':'74,158,255'},0.1);padding:1px 5px;border-radius:2px;">${tierLabel(c.tier)}</span>
+          <span style="color:var(--muted);">${c.pts} pts</span>
+        </div>
+      </div>`;
+    card.onclick = () => toggleConstructor(i);
+    cp.appendChild(card);
+  });
+
+  updateSummary();
+}
+
+function toggleDriver(i) {
+  if (selectedDrivers.includes(i)) {
+    selectedDrivers = selectedDrivers.filter(x => x !== i);
+  } else {
+    if (selectedDrivers.length >= 5) return;
+    selectedDrivers.push(i);
+  }
+  buildPicker();
+}
+
+function toggleConstructor(i) {
+  if (selectedConstructors.includes(i)) {
+    selectedConstructors = selectedConstructors.filter(x => x !== i);
+  } else {
+    if (selectedConstructors.length >= 2) return;
+    selectedConstructors.push(i);
+  }
+  buildPicker();
+}
+
+function updateSummary() {
+  const slots = document.getElementById('builder-slots');
+  let html = '';
+  const driverLabels = ["Driver 1","Driver 2","Driver 3","Driver 4","Driver 5"];
+  let totalCost = 0;
+
+  driverLabels.forEach((lbl, i) => {
+    const hasDriver = selectedDrivers[i] !== undefined;
+    const d = hasDriver ? DRIVERS[selectedDrivers[i]] : null;
+    if (d) totalCost += d.price;
+    html += `<div class="builder-slot-row">
+      <div class="slot-dot ${hasDriver ? 'filled-d' : ''}"></div>
+      <div class="slot-name-col ${hasDriver ? 'has-val' : ''}">${hasDriver ? d.name : lbl}</div>
+      <div class="slot-price-col">${hasDriver ? '$'+d.price+'M' : '—'}</div>
+    </div>`;
+  });
+
+  const conLabels = ["Constructor 1","Constructor 2"];
+  conLabels.forEach((lbl, i) => {
+    const hasCon = selectedConstructors[i] !== undefined;
+    const c = hasCon ? CONSTRUCTORS[selectedConstructors[i]] : null;
+    if (c) totalCost += c.price;
+    html += `<div class="builder-slot-row">
+      <div class="slot-dot ${hasCon ? 'filled-c' : ''}"></div>
+      <div class="slot-name-col ${hasCon ? 'has-val' : ''}">${hasCon ? c.name : lbl}</div>
+      <div class="slot-price-col">${hasCon ? '$'+c.price+'M' : '—'}</div>
+    </div>`;
+  });
+
+  slots.innerHTML = html;
+
+  const remaining = 100 - totalCost;
+  const over = remaining < 0;
+  const pct = Math.min(100, (totalCost / 100) * 100);
+
+  document.getElementById('budget-used-num').textContent = '$' + totalCost.toFixed(1) + 'M';
+  document.getElementById('budget-used-num').style.color = over ? 'var(--red)' : 'var(--text)';
+  document.getElementById('budget-remaining-num').textContent = (over ? '-' : '') + '$' + Math.abs(remaining).toFixed(1) + 'M';
+  document.getElementById('budget-remaining-num').style.color = over ? 'var(--red)' : 'var(--green)';
+  document.getElementById('builder-bar').style.width = pct + '%';
+  document.getElementById('builder-bar').style.background = over ? 'linear-gradient(90deg,#E8002D,#ff4444)' : 'linear-gradient(90deg,var(--red),#ff4444)';
+  document.getElementById('over-budget-warn').style.display = over ? 'block' : 'none';
+}
+
+function analyseTeam() {
+  const panel = document.getElementById('insight-panel');
+
+  if (selectedDrivers.length < 5 || selectedConstructors.length < 2) {
+    panel.style.display = 'block';
+    panel.innerHTML = `<div style="font-family:'Space Mono',monospace;font-size:12px;color:var(--orange);line-height:1.7;">
+      ⚠ Please select all 5 drivers and 2 constructors before analysing.
+    </div>`;
+    return;
+  }
+
+  const drivers = selectedDrivers.map(i => DRIVERS[i]);
+  const constructors = selectedConstructors.map(i => CONSTRUCTORS[i]);
+  const totalCost = [...drivers, ...constructors].reduce((s, x) => s + x.price, 0);
+  const remaining = 100 - totalCost;
+  const over = remaining < 0;
+
+  // --- SCORING ---
+  const avgPPM = drivers.reduce((s, d) => s + d.ppm, 0) / 5;
+  const totalWins = drivers.reduce((s, d) => s + d.wins, 0);
+  const totalPts = drivers.reduce((s, d) => s + d.pts, 0);
+  const avgDNF = drivers.reduce((s, d) => s + d.dnf, 0) / 5;
+  const eliteDrivers = drivers.filter(d => d.tier === 'S').length;
+  const valueDrivers = drivers.filter(d => d.tier === 'V').length;
+  const deadZone = drivers.filter(d => ['B','C'].includes(d.tier) && d.price > 9).length;
+  const eliteCons = constructors.filter(c => c.tier === 'S').length;
+  const conPPM = constructors.reduce((s, c) => s + c.ppm, 0) / 2;
+
+  let score = 60;
+  score += eliteDrivers * 8;
+  score += valueDrivers * 6;
+  score -= deadZone * 7;
+  score += Math.min(20, avgPPM * 0.4);
+  score -= avgDNF * 3;
+  score += eliteCons * 10;
+  score -= over ? 20 : 0;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let grade, gradeColor;
+  if (score >= 85) { grade = 'A'; gradeColor = 'score-A'; }
+  else if (score >= 70) { grade = 'B'; gradeColor = 'score-B'; }
+  else if (score >= 55) { grade = 'C'; gradeColor = 'score-C'; }
+  else if (score >= 40) { grade = 'D'; gradeColor = 'score-D'; }
+  else { grade = 'F'; gradeColor = 'score-F'; }
+
+  // --- BUILD INSIGHTS ---
+  const insights = [];
+
+  // Budget
+  if (over) {
+    insights.push({ type: 'bad', icon: '💸', text: `You're $${Math.abs(remaining).toFixed(1)}M over the $100M cap. This lineup is <strong>invalid</strong> — remove a selection.` });
+  } else if (remaining < 2) {
+    insights.push({ type: 'good', icon: '💰', text: `Excellent budget use — only $${remaining.toFixed(1)}M left on the table. Maximally efficient.` });
+  } else if (remaining > 15) {
+    insights.push({ type: 'bad', icon: '💸', text: `You're leaving $${remaining.toFixed(1)}M unspent. Upgrade your cheapest picks — unused budget is wasted potential.` });
+  } else {
+    insights.push({ type: 'neutral', icon: '💰', text: `$${remaining.toFixed(1)}M remaining. Decent usage — see if you can squeeze in a slightly pricier pick.` });
+  }
+
+  // Elite drivers
+  if (eliteDrivers === 0) {
+    insights.push({ type: 'bad', icon: '🏎', text: `No elite (S-tier) drivers selected. Verstappen/Norris/Piastri combined for <strong>1,164 pts</strong> in 2025. Missing them is a huge handicap.` });
+  } else if (eliteDrivers === 1) {
+    insights.push({ type: 'neutral', icon: '🏎', text: `One S-tier driver is a good anchor — but the top 3 earned an average of <strong>388 pts</strong> each. Consider fitting a second if budget allows.` });
+  } else if (eliteDrivers >= 2) {
+    insights.push({ type: 'good', icon: '🏎', text: `${eliteDrivers} elite-tier drivers — the backbone of a winning squad. The McLaren/RB trio dominated 2025 scoring.` });
+  }
+
+  // Value drivers
+  if (valueDrivers >= 2) {
+    insights.push({ type: 'good', icon: '⚡', text: `Smart value selection — Bearman (27.8 PPM), Hülkenberg, and Ocon free up cap space without sacrificing scoring floors.` });
+  } else if (valueDrivers === 1) {
+    insights.push({ type: 'neutral', icon: '⚡', text: `One value pick helps — ideally you want 2–3 to keep mid-tier spending low and focus budget on your elite anchor.` });
+  }
+
+  // Dead zone
+  if (deadZone > 0) {
+    const deadNames = drivers.filter(d => ['B','C'].includes(d.tier) && d.price > 9).map(d => d.name).join(', ');
+    insights.push({ type: 'bad', icon: '⚠', text: `${deadNames} sit in the $9–23M dead zone — too expensive for their output. Their PPM is well below premium picks. Swap for elite or value alternatives.` });
+  }
+
+  // Reliability
+  if (avgDNF > 3) {
+    insights.push({ type: 'bad', icon: '🔧', text: `Your average DNF rate is ${avgDNF.toFixed(1)} per driver — very high. DNFs score 0 and kill your round. Consider more reliable picks.` });
+  } else if (avgDNF < 2) {
+    insights.push({ type: 'good', icon: '🔧', text: `Great reliability profile — low DNF risk means consistent scoring across every race weekend.` });
+  }
+
+  // Constructor insight
+  if (eliteCons === 1) {
+    insights.push({ type: 'good', icon: '🏗', text: `Good constructor choice — pairing a premium constructor (high pts ceiling) with a budget one is the optimal strategy.` });
+  } else if (eliteCons === 2) {
+    insights.push({ type: 'neutral', icon: '🏗', text: `Two premium constructors is high-risk/high-reward — it works if your driver budget is tight, but you're betting heavily on two teams staying consistent.` });
+  } else if (conPPM < 8) {
+    insights.push({ type: 'bad', icon: '🏗', text: `Low constructor PPM (${conPPM.toFixed(1)} avg). Consider McLaren ($28.9M, 26.8 PPM) as your primary — it scored the most constructor pts in 2025.` });
+  }
+
+  // Wins
+  if (totalWins >= 10) {
+    insights.push({ type: 'good', icon: '🏆', text: `${totalWins} combined wins from your drivers — dominant scoring potential, wins add massive fantasy point bonuses.` });
+  } else if (totalWins === 0) {
+    insights.push({ type: 'bad', icon: '🏆', text: `0 race wins across your 5 drivers. Win bonuses are the biggest single-race multiplier in fantasy — you're missing out.` });
+  }
+
+  // PPM verdict
+  if (avgPPM >= 14) {
+    insights.push({ type: 'good', icon: '📐', text: `Excellent PPM of ${avgPPM.toFixed(1)} across your drivers — top-tier value efficiency. You're squeezing the most from your $100M.` });
+  } else if (avgPPM < 8) {
+    insights.push({ type: 'bad', icon: '📐', text: `Low avg driver PPM of ${avgPPM.toFixed(1)}. Apply the Two Zones Rule: one $25-28M elite + two $6-8M value picks outperform three $15M mid-tier selections.` });
+  }
+
+  // Final summary
+  const summaryText = score >= 85
+    ? "Championship-contending lineup. Excellent balance of ceiling and value."
+    : score >= 70
+    ? "Solid squad with a couple of upgrades available — competitive but beatable."
+    : score >= 55
+    ? "Mixed lineup. Some good picks offset by dead-zone spending or missing elite drivers."
+    : score >= 40
+    ? "Significant issues — budget inefficiency or missing key drivers. Needs a rethink."
+    : "This lineup has major structural problems. Follow the Strategy tab advice to rebuild.";
+
+  let insightHTML = `
+    <div style="font-family:'Bebas Neue';font-size:20px;letter-spacing:1px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:10px;">TEAM ANALYSIS</div>
+    <div style="display:flex;align-items:flex-end;gap:16px;margin-bottom:12px;">
+      <div><div class="insight-label">OVERALL GRADE</div><div class="insight-score ${gradeColor}">${grade}</div></div>
+      <div style="flex:1;padding-bottom:8px;">
+        <div style="font-size:28px;font-family:'Bebas Neue';color:${gradeColor.includes('A')?'#00E87A':gradeColor.includes('B')?'#4A9EFF':gradeColor.includes('C')?'#FFD700':gradeColor.includes('D')?'#FF6B35':'#E8002D'};">${score}/100</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;">${summaryText}</div>
+      </div>
+    </div>
+  `;
+
+  insights.forEach(ins => {
+    insightHTML += `<div class="insight-row ${ins.type}">
+      <div class="insight-icon">${ins.icon}</div>
+      <div style="color:${ins.type==='good'?'var(--text)':ins.type==='bad'?'#ffaaaa':'var(--text)'};">${ins.text}</div>
+    </div>`;
+  });
+
+  panel.innerHTML = insightHTML;
+  panel.style.display = 'block';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelector(`#panel-${tab}`).classList.add('active');
   event.target.classList.add('active');
+  if (tab === 'builder') buildPicker();
 }
 
-// Animate budget bar on load
 window.addEventListener('load', () => {
   setTimeout(() => {
     const bar = document.querySelector('.bar-fill');
